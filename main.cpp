@@ -7,10 +7,18 @@
 #include <functional>
 #include <cstdlib>
 #include <vector>
+#include <cstring>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
 const char * TITLE = "Hello Triangle";
+const std::vector<const char*> validationLayers = { "VK_LAYER_LUNARG_standard_validation" };
+
+#ifdef NDEBUG
+    const bool enableValidationLayers = false;
+#else
+    const bool enableValidationLayers = true;
+#endif
 
 class HelloTriangleApplication
 {
@@ -50,12 +58,19 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroyInstance(instance, nullptr);
             glfwDestroyWindow(window);
             glfwTerminate();
         }
 
         void createInstance()
         {
+            // check for validation layers if applicable
+            if(enableValidationLayers && !checkValidationLayerSupport())
+            {
+                throw std::runtime_error("validation layers requested, but not available");
+            }
+
             // create vulkan app information structure
             VkApplicationInfo appInfo = {};
             appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -97,6 +112,33 @@ class HelloTriangleApplication
             {
                 std::cout << "\t" << extension.extensionName << std::endl;
             }
+        }
+
+        bool checkValidationLayerSupport()
+        {
+            uint32_t layerCount;
+            vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+            std::vector<VkLayerProperties> availableLayers(layerCount);
+            vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+            //return false;
+
+            for (const char* layerName : validationLayers)
+            {
+                bool layerFound = false;
+                for (const auto& layerProperties : availableLayers)
+                {
+                    if(strcmp(layerName, layerProperties.layerName) == 0)
+                    {
+                        layerFound = true;
+                        break;
+                    }
+                }
+
+                if(!layerFound) return false;
+            }
+
+            return true;
         }
 };
 
