@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <functional>
 #include <cstdlib>
+#include <vector>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -77,6 +78,24 @@ class HelloTriangleApplication
             // vkCreateInstance() returns type VkResult
             if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
                 throw std::runtime_error("failed to create instance!");
+            }
+
+            checkExtensions();
+        }
+
+        void checkExtensions()
+        {
+            uint32_t extensionCount = 0;
+            // query number of extensions by leaving last arg nullptr
+            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+            std::vector<VkExtensionProperties> extensions(extensionCount);
+            // query extension details
+            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+            std::cout << "available extensions: " << std::endl;
+            for (const auto& extension : extensions)
+            {
+                std::cout << "\t" << extension.extensionName << std::endl;
             }
         }
 };
