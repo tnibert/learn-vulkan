@@ -102,7 +102,15 @@ class HelloTriangleApplication
 
         bool isDeviceSuitable(VkPhysicalDevice device)
         {
-            return true;
+	    // we could evaluate this by assigning scores to devices
+	    // and selecting the highest scoring device
+	    VkPhysicalDeviceProperties deviceProperties;
+	    VkPhysicalDeviceFeatures deviceFeatures;
+	    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+	    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+	    //return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+	    //    deviceFeatures.geometryShader;
+	    return true;
         }
 
         void setupDebugCallback()
