@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <vector>
 #include <cstring>
+#include <optional>
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -35,6 +36,15 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
         func(instance, callback, pAllocator);
     }
 }
+
+struct QueueFamilyIndices
+{
+    std::optional<uint32_t> graphicsFamily;
+    bool isComplete()
+    {
+        return graphicsFamily.has_value();
+    }
+};
 
 class HelloTriangleApplication
 {
@@ -104,14 +114,48 @@ class HelloTriangleApplication
         {
 	    // we could evaluate this by assigning scores to devices
 	    // and selecting the highest scoring device
+
+            // the following is not required, but demonstrates how you query devices
 	    VkPhysicalDeviceProperties deviceProperties;
 	    VkPhysicalDeviceFeatures deviceFeatures;
 	    vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 	    //return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 	    //    deviceFeatures.geometryShader;
-	    return true;
+	    
+            QueueFamilyIndices indices = findQueueFamilies(device);
+
+            return indices.isComplete();
         }
+  
+        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+        {
+	    QueueFamilyIndices indices;
+            
+            uint32_t queueFamilyCount = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+            std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+            int i = 0;
+            for (const auto& queueFamily : queueFamilies)
+            {
+                if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                {
+                    indices.graphicsFamily = i;
+                }
+
+                if (indices.isComplete())
+                {
+                   break;
+                }
+
+                i++;
+            }
+
+	    return indices;
+	}
 
         void setupDebugCallback()
         {
