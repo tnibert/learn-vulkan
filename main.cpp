@@ -76,34 +76,34 @@ class HelloTriangleApplication
         {
             createInstance();
             setupDebugCallback();
-	    pickPhysicalDevice();
+	        pickPhysicalDevice();
         }
 
         void pickPhysicalDevice()
         {
             VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	    uint32_t deviceCount = 0;
+	        uint32_t deviceCount = 0;
             vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 
-	    if (deviceCount == 0)
-	    {
+            if (deviceCount == 0)
+            {
                 throw std::runtime_error("failed to find GPUs with Vulkan support!");
             }
 
-	    std::vector<VkPhysicalDevice> devices(deviceCount);
+            std::vector<VkPhysicalDevice> devices(deviceCount);
             vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-	    for (const auto& device : devices)
-	    {
+            for (const auto& device : devices)
+            {
                 if (isDeviceSuitable(device))
-		{
+                {
                     physicalDevice = device;
                     break;
                 }
             }
 
             if (physicalDevice == VK_NULL_HANDLE)
-	    {
+            {
                 throw std::runtime_error("failed to find a suitable GPU!");
             }
 
@@ -112,16 +112,16 @@ class HelloTriangleApplication
 
         bool isDeviceSuitable(VkPhysicalDevice device)
         {
-	    // we could evaluate this by assigning scores to devices
-	    // and selecting the highest scoring device
+            // we could evaluate this by assigning scores to devices
+            // and selecting the highest scoring device
 
-            // the following is not required, but demonstrates how you query devices
-	    VkPhysicalDeviceProperties deviceProperties;
-	    VkPhysicalDeviceFeatures deviceFeatures;
-	    vkGetPhysicalDeviceProperties(device, &deviceProperties);
-	    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-	    //return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-	    //    deviceFeatures.geometryShader;
+                // the following is not required, but demonstrates how you query devices
+            VkPhysicalDeviceProperties deviceProperties;
+            VkPhysicalDeviceFeatures deviceFeatures;
+            vkGetPhysicalDeviceProperties(device, &deviceProperties);
+            vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+            //return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+            //    deviceFeatures.geometryShader;
 	    
             QueueFamilyIndices indices = findQueueFamilies(device);
 
@@ -130,7 +130,7 @@ class HelloTriangleApplication
   
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
         {
-	    QueueFamilyIndices indices;
+	        QueueFamilyIndices indices;
             
             uint32_t queueFamilyCount = 0;
             vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
@@ -154,8 +154,8 @@ class HelloTriangleApplication
                 i++;
             }
 
-	    return indices;
-	}
+	        return indices;
+	    }
 
         void setupDebugCallback()
         {
