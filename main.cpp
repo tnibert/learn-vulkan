@@ -65,6 +65,8 @@ class HelloTriangleApplication
         VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
         VkDevice device;
 
+        VkQueue graphicsQueue;
+
         void initWindow()
         {
             glfwInit();
@@ -125,6 +127,9 @@ class HelloTriangleApplication
             {
                 throw std::runtime_error("failed to create logical device!");
             }
+
+            // get graphics queue
+            vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
         }
 
         void pickPhysicalDevice()
@@ -153,8 +158,6 @@ class HelloTriangleApplication
             {
                 throw std::runtime_error("failed to find a suitable GPU!");
             }
-
-	    
         }
 
         bool isDeviceSuitable(VkPhysicalDevice device)
