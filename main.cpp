@@ -16,10 +16,6 @@
 /**
  * Misc notes:
  *
- * for swap chain terms:
- * Surface format (color depth)
- * Presentation mode (conditions for "swapping" images to the screen)
- * Swap extent (resolution of images in swap chain)
  */
 
 const int WIDTH = 800;
@@ -86,10 +82,12 @@ class HelloTriangleApplication
         VkSurfaceKHR surface;
 
         VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-        VkDevice device;
+        VkDevice device;            // logical device
 
         VkQueue graphicsQueue;
         VkQueue presentQueue;
+
+        VkSwapchainKHR swapChain;
 
         void initWindow()
         {
@@ -108,6 +106,77 @@ class HelloTriangleApplication
             createSurface();
 	        pickPhysicalDevice();
 	        createLogicalDevice();
+            createSwapChain();
+        }
+
+        /**
+         * swap chain terms:
+         * Surface format (color depth)
+         * Presentation mode (conditions for "swapping" images to the screen)
+         * Swap extent (resolution of images in swap chain)
+         */
+        void createSwapChain()
+        {
+            SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+
+            VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+            VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+            VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+
+            // number of images to have in swap chain
+            uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+
+            // ensure max number of images is not exceeded
+            if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
+            {
+                imageCount = swapChainSupport.capabilities.maxImageCount;
+            }
+
+            // swap chain config structure
+            VkSwapchainCreateInfoKHR createInfo = {};
+            createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+            createInfo.surface = surface;
+
+            createInfo.minImageCount = imageCount;
+            createInfo.imageFormat = surfaceFormat.format;
+            createInfo.imageColorSpace = surfaceFormat.colorSpace;
+            createInfo.imageExtent = extent;
+            createInfo.imageArrayLayers = 1;            // number of layers each image consists of
+            createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+            // We'll be drawing on the images in the swap chain from the graphics queue and then submitting them on the presentation queue.
+            QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+            uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+
+            if (indices.graphicsFamily != indices.presentFamily)
+            {
+                createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;       // avoid changing ownership of images
+                createInfo.queueFamilyIndexCount = 2;
+                createInfo.pQueueFamilyIndices = queueFamilyIndices;
+            }
+            else
+            {
+                createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;        // most performant
+                createInfo.queueFamilyIndexCount = 0; // Optional
+                createInfo.pQueueFamilyIndices = nullptr; // Optional
+            }
+
+            // no transformation applied
+            createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+
+            // ignore alpha
+            createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+            createInfo.presentMode = presentMode;
+            createInfo.clipped = VK_TRUE;           // we don't care about pixel colors that aren't displayed, enhance performance
+
+            // no old swap chain specified if swap chain needs to be recreated
+            createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+            if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create swap chain!");
+            }
         }
 
         void createSurface()
@@ -390,6 +459,7 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroySwapchainKHR(device, swapChain, nullptr);
             vkDestroyDevice(device, nullptr);
 
             if(enableValidationLayers) {
