@@ -1,4 +1,4 @@
-CFLAGS = -std=c++11 -I/usr/include/vulkan/
+CFLAGS = -std=c++17 -I/usr/include/vulkan/
 
 LDFLAGS = -L/usr/lib/x86_64-linux-gnu/ `pkg-config --static --libs glfw3` -lvulkan
 
