@@ -15,7 +15,7 @@ const int WIDTH = 800;
 const int HEIGHT = 600;
 const char * TITLE = "Hello Triangle";
 const std::vector<const char*> validationLayers = { "VK_LAYER_LUNARG_standard_validation" };
-
+const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 #ifdef NDEBUG
     const bool enableValidationLayers = false;
 #else
@@ -188,17 +188,37 @@ class HelloTriangleApplication
             // we could evaluate this by assigning scores to devices
             // and selecting the highest scoring device
 
-                // the following is not required, but demonstrates how you query devices
-            VkPhysicalDeviceProperties deviceProperties;
-            VkPhysicalDeviceFeatures deviceFeatures;
-            vkGetPhysicalDeviceProperties(device, &deviceProperties);
-            vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+            // the following is not required, but demonstrates how you query devices
+            //VkPhysicalDeviceProperties deviceProperties;
+            //VkPhysicalDeviceFeatures deviceFeatures;
+            //vkGetPhysicalDeviceProperties(device, &deviceProperties);
+            //vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
             //return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
             //    deviceFeatures.geometryShader;
-	    
+
             QueueFamilyIndices indices = findQueueFamilies(device);
 
-            return indices.isComplete();
+            bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+            return indices.isComplete() && extensionsSupported;
+        }
+
+        bool checkDeviceExtensionSupport(VkPhysicalDevice device)
+        {
+            uint32_t extensionCount;
+            vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+            std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+            vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+            std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+            for (const auto& extension : availableExtensions)
+            {
+                requiredExtensions.erase(extension.extensionName);
+            }
+
+            return requiredExtensions.empty();
         }
   
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
