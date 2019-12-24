@@ -10,6 +10,17 @@
 #include <cstring>
 #include <optional>
 #include <set>
+#include <cstdint>
+#include <algorithm>
+
+/**
+ * Misc notes:
+ *
+ * for swap chain terms:
+ * Surface format (color depth)
+ * Presentation mode (conditions for "swapping" images to the screen)
+ * Swap extent (resolution of images in swap chain)
+ */
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -298,6 +309,60 @@ class HelloTriangleApplication
             }
 
             return details;
+        }
+
+        VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+        {
+            // use SRGB color space if available
+            for (const auto& availableFormat : availableFormats)
+            {
+                if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                {
+                    return availableFormat;
+                }
+            }
+
+            std::cout << "SRGB color format not available" << std::endl;
+
+            // if not just return the first available
+            return availableFormats[0];
+        }
+
+        VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+        {
+            // check if we can do triple buffering
+            for (const auto& availablePresentMode : availablePresentModes) {
+                if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+                    return availablePresentMode;
+                }
+            }
+
+            std::cout << "triple buffering (with mailbox presentation mode) not available" << std::endl;
+
+            // guaranteed to be available
+            return VK_PRESENT_MODE_FIFO_KHR;
+        }
+
+        /**
+         * The swap extent is the resolution of the swap chain images and it's almost always exactly equal to the resolution of the window that we're drawing to.
+         * @param capabilities
+         * @return
+         */
+        VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+        {
+            if (capabilities.currentExtent.width != UINT32_MAX)
+            {
+                return capabilities.currentExtent;
+            }
+            else
+            {
+                VkExtent2D actualExtent = {WIDTH, HEIGHT};
+
+                actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
+                actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+
+                return actualExtent;
+            }
         }
 
         void setupDebugCallback()
