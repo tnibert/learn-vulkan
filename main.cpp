@@ -109,10 +109,16 @@ class HelloTriangleApplication
             createInstance();
             setupDebugCallback();
             createSurface();
-	        pickPhysicalDevice();
-	        createLogicalDevice();
+            pickPhysicalDevice();
+            createLogicalDevice();
             createSwapChain();
             createImageViews();
+	    createGraphicsPipeline();
+        }
+
+        void createGraphicsPipeline()
+        {
+
         }
 
         /**
