@@ -170,6 +170,66 @@ class HelloTriangleApplication
 
             // for referencing later
             VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+            // no vertex data to load
+            VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+            vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputInfo.vertexBindingDescriptionCount = 0;
+            vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
+            vertexInputInfo.vertexAttributeDescriptionCount = 0;
+            vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+            // configure input assembly
+            VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+            inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            // what kind of geometry will be drawn from the vertices - triangles
+            inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+            // configure viewport (region of framebuffer to render to)
+            VkViewport viewport = {};
+            viewport.x = 0.0f;
+            viewport.y = 0.0f;
+            viewport.width = (float) swapChainExtent.width;
+            viewport.height = (float) swapChainExtent.height;
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+
+            // scissor rectangle that covers entire framebuffer
+            VkRect2D scissor = {};
+            scissor.offset = {0, 0};
+            scissor.extent = swapChainExtent;
+
+            // combine into viewport state
+            VkPipelineViewportStateCreateInfo viewportState = {};
+            viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewportState.viewportCount = 1;
+            viewportState.pViewports = &viewport;
+            viewportState.scissorCount = 1;
+            viewportState.pScissors = &scissor;
+
+            // rasterizer
+            // The rasterizer takes the geometry that is shaped by the vertices from the vertex shader and turns it into fragments to be colored by the fragment shader.
+            VkPipelineRasterizationStateCreateInfo rasterizer = {};
+            rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            // if true, fragments that are beyond the near and far planes are clamped to them as opposed to discarding them.
+            // This is useful in some special cases like shadow maps. Using this requires enabling a GPU feature.
+            rasterizer.depthClampEnable = VK_FALSE;
+            // if true, then geometry never passes through the rasterizer stage. This basically disables any output to the framebuffer.
+            rasterizer.rasterizerDiscardEnable = VK_FALSE;
+            // how fragments are generated for geometry
+            rasterizer.polygonMode = VK_POLYGON_MODE_FILL;       // fill the area of the polygon with fragments, using any other mode requires enabling GPU feature
+            // thickness of lines in terms of number of fragments
+            // greater than 1.0f requires enabling of wideLines GPU feature
+            rasterizer.lineWidth = 1.0f;
+            // face culling
+            rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+            rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+
+            rasterizer.depthBiasEnable = VK_FALSE;
+            rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+            rasterizer.depthBiasClamp = 0.0f; // Optional
+            rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
             
 	    // destroy shader modules
             vkDestroyShaderModule(device, fragShaderModule, nullptr);
