@@ -121,6 +121,8 @@ class HelloTriangleApplication
 
         std::vector<VkImageView> swapChainImageViews;
 
+        VkPipelineLayout pipelineLayout;
+
         void initWindow()
         {
             glfwInit();
@@ -230,6 +232,77 @@ class HelloTriangleApplication
             rasterizer.depthBiasConstantFactor = 0.0f; // Optional
             rasterizer.depthBiasClamp = 0.0f; // Optional
             rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+            // Multisampling
+            // one way to perform antialiasing
+            // works by combining the fragment shader results of multiple polygons that rasterize to the same pixel
+            // enabling requires enabling a GPU feature - leaving disabled for now
+            VkPipelineMultisampleStateCreateInfo multisampling = {};
+            multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisampling.sampleShadingEnable = VK_FALSE;
+            multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+            multisampling.minSampleShading = 1.0f; // Optional
+            multisampling.pSampleMask = nullptr; // Optional
+            multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+            multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+            /*
+             * If you are using a depth and/or stencil buffer, then you also need to configure the depth and stencil tests 
+             * using VkPipelineDepthStencilStateCreateInfo. We don't have one right now, so we can simply pass a nullptr 
+             * instead of a pointer to such a struct. We'll get back to it in the depth buffering chapter.
+             */
+
+            // color blending
+            /* After a fragment shader has returned a color, it needs to be combined with the color that is already in the framebuffer
+             * This transformation is known as color blending and there are two ways to do it:
+             * - Mix the old and new value to produce a final color
+             * - Combine the old and new value using a bitwise operation
+             * There are two types of structs to configure color blending.
+             * The first struct, VkPipelineColorBlendAttachmentState contains the configuration per attached framebuffer 
+             * and the second struct, VkPipelineColorBlendStateCreateInfo contains the global color blending settings. In our case we only have one framebuffer:
+             */
+            VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+            colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+            colorBlendAttachment.blendEnable = VK_FALSE;
+            colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+            colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+            colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+            colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+            colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+            colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+            // If blendEnable is set to VK_FALSE, then the new color from the fragment shader is passed through unmodified.
+            // Otherwise, the two mixing operations are performed to compute a new color.
+            // The resulting color is AND'd with the colorWriteMask to determine which channels are actually passed through.
+            // this can be used for alpha blending (opacity)
+
+            // second color blending structure (global color blending settings)
+            VkPipelineColorBlendStateCreateInfo colorBlending = {};
+            colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            colorBlending.logicOpEnable = VK_FALSE;
+            colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
+            colorBlending.attachmentCount = 1;
+            colorBlending.pAttachments = &colorBlendAttachment;
+            colorBlending.blendConstants[0] = 0.0f; // Optional
+            colorBlending.blendConstants[1] = 0.0f; // Optional
+            colorBlending.blendConstants[2] = 0.0f; // Optional
+            colorBlending.blendConstants[3] = 0.0f; // Optional
+
+            // a bit of state can be changed dynamically with VkPipelineDynamicStateCreateInfo
+            // to avoid recreating entire pipeline
+
+            // create an empty pipeline layout
+            // The structure also specifies push constants, which are another way of passing dynamic values to shaders
+            VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+            pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            pipelineLayoutInfo.setLayoutCount = 0; // Optional
+            pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+            pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+            pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+            if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create pipeline layout!");
+            }
             
 	    // destroy shader modules
             vkDestroyShaderModule(device, fragShaderModule, nullptr);
@@ -656,6 +729,7 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
             for (auto imageView : swapChainImageViews)
             {
                 vkDestroyImageView(device, imageView, nullptr);
