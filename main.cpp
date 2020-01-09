@@ -124,6 +124,8 @@ class HelloTriangleApplication
         VkRenderPass renderPass;
         VkPipelineLayout pipelineLayout;
 
+        VkPipeline graphicsPipeline;
+
         void initWindow()
         {
             glfwInit();
@@ -191,6 +193,13 @@ class HelloTriangleApplication
             }
         }
 
+        /**
+         * The following objects combine to define the graphics pipeline:
+         * Shader stages: the shader modules that define the functionality of the programmable stages of the graphics pipeline
+         * Fixed-function state: all of the structures that define the fixed-function stages of the pipeline, like input assembly, rasterizer, viewport and color blending
+         * Pipeline layout: the uniform and push values referenced by the shader that can be updated at draw time
+         * Render pass: the attachments referenced by the pipeline stages and their usage
+         */
         void createGraphicsPipeline()
         {
 	    // can destroy shader modules after graphics pipeline is created
@@ -348,6 +357,36 @@ class HelloTriangleApplication
             if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
             {
                 throw std::runtime_error("failed to create pipeline layout!");
+            }
+
+            // create the pipeline itself
+            VkGraphicsPipelineCreateInfo pipelineInfo = {};
+            pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineInfo.stageCount = 2;
+            pipelineInfo.pStages = shaderStages;
+            // reference fixed function stage
+            pipelineInfo.pVertexInputState = &vertexInputInfo;
+            pipelineInfo.pInputAssemblyState = &inputAssembly;
+            pipelineInfo.pViewportState = &viewportState;
+            pipelineInfo.pRasterizationState = &rasterizer;
+            pipelineInfo.pMultisampleState = &multisampling;
+            pipelineInfo.pDepthStencilState = nullptr; // Optional
+            pipelineInfo.pColorBlendState = &colorBlending;
+            pipelineInfo.pDynamicState = nullptr; // Optional
+            // set pipeline layout as vulkan handle, not struct pointer
+            pipelineInfo.layout = pipelineLayout;
+
+            pipelineInfo.renderPass = renderPass;
+            pipelineInfo.subpass = 0;
+            
+            // you can create a new graphics pipeline by deriving from existing pipeline
+            pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+            pipelineInfo.basePipelineIndex = -1; // Optional
+
+            // create it!
+            if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create graphics pipeline!");
             }
             
 	    // destroy shader modules
@@ -775,6 +814,7 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroyPipeline(device, graphicsPipeline, nullptr);
             vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
             vkDestroyRenderPass(device, renderPass, nullptr);
             
