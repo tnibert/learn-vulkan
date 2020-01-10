@@ -128,6 +128,9 @@ class HelloTriangleApplication
 
         std::vector<VkFramebuffer> swapChainFramebuffers;
 
+        VkCommandPool commandPool;
+        std::vector<VkCommandBuffer> commandBuffers;
+
         void initWindow()
         {
             glfwInit();
@@ -150,6 +153,93 @@ class HelloTriangleApplication
             createRenderPass();
 	    createGraphicsPipeline();
             createFramebuffers();
+            createCommandPool();
+            createCommandBuffers();
+        }
+
+        /**
+         * Command buffers will be automatically freed when their command pool is destroyed
+         * don't need to explicitly clean up
+         */
+        void createCommandBuffers()
+        {
+            commandBuffers.resize(swapChainFramebuffers.size());
+
+            VkCommandBufferAllocateInfo allocInfo = {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.commandPool = commandPool;
+            // Primary - Can be submitted to a queue for execution, but cannot be called from other command buffers.
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandBufferCount = (uint32_t) commandBuffers.size();
+
+            if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to allocate command buffers!");
+            }
+
+            for (size_t i = 0; i < commandBuffers.size(); i++)
+            {
+                VkCommandBufferBeginInfo beginInfo = {};
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags = 0; // Optional
+                beginInfo.pInheritanceInfo = nullptr; // Optional
+
+                // If the command buffer was already recorded once, then a call to vkBeginCommandBuffer
+                //will implicitly reset it. It's not possible to append commands to a buffer at a later time.
+                if (vkBeginCommandBuffer(commandBuffers[i], &beginInfo) != VK_SUCCESS)
+                {
+                    throw std::runtime_error("failed to begin recording command buffer!");
+                }
+
+                // Drawing starts by beginning the render pass with vkCmdBeginRenderPass                                                                                                     
+                VkRenderPassBeginInfo renderPassInfo = {};
+                renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassInfo.renderPass = renderPass;
+                renderPassInfo.framebuffer = swapChainFramebuffers[i];
+                // size of render area - defines where shader loads and stores take place
+                renderPassInfo.renderArea.offset = {0, 0};
+                renderPassInfo.renderArea.extent = swapChainExtent;
+                // define clear values for VK_ATTACHMENT_LOAD_OP_CLEAR (load op used for color attachment)
+                VkClearValue clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
+                renderPassInfo.clearValueCount = 1;
+                renderPassInfo.pClearValues = &clearColor;
+
+                // begin the render pass recording
+                vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+                // bind the graphics pipeline
+                vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+                // tell vulkan to draw a triangle
+                vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+
+                // end render pass
+                vkCmdEndRenderPass(commandBuffers[i]);
+
+                // finish recording command buffer
+                if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
+                {
+                    throw std::runtime_error("failed to record command buffer!");
+                }
+            }
+        }
+
+        /**
+         * Command buffers are executed by submitting them onto device queues
+         */
+        void createCommandPool()
+        {
+            QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+            VkCommandPoolCreateInfo poolInfo = {};
+            poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+            poolInfo.flags = 0; // Optional
+
+            if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create command pool!");
+            }
         }
 
         void createFramebuffers()
@@ -848,6 +938,8 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroyCommandPool(device, commandPool, nullptr);
+            
             for (auto framebuffer : swapChainFramebuffers)
             {
                 vkDestroyFramebuffer(device, framebuffer, nullptr);
