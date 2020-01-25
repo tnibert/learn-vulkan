@@ -148,15 +148,21 @@ class HelloTriangleApplication
 
         // frame index to use correct pair of semaphores
         size_t currentFrame = 0;
+
+        bool framebufferResized = false;
   
         void initWindow()
         {
             glfwInit();
             // tell glfw to not use opengl
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+            
             // disable window resizing
-            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+            //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+            
             window = glfwCreateWindow(WIDTH, HEIGHT, TITLE, nullptr, nullptr);
+            glfwSetWindowUserPointer(window, this);
+            glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
         }
 
         void initVulkan()
@@ -174,6 +180,17 @@ class HelloTriangleApplication
             createCommandPool();
             createCommandBuffers();
             createSyncObjects();
+        }
+
+        /**
+         * The reason that we're creating a static function as a callback is because GLFW 
+         * does not know how to properly call a member function with the right this pointer 
+         * to our HelloTriangleApplication instance.
+         */
+        static void framebufferResizeCallback(GLFWwindow* window, int width, int height)
+        {
+            auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+            app->framebufferResized = true;
         }
 
         void cleanupSwapChain()
@@ -1069,7 +1086,20 @@ class HelloTriangleApplication
 
             // acquire image from swap chain
             uint32_t imageIndex;
-            vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+            VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+            // If the swap chain turns out to be out of date when attempting to acquire an image, then
+            // it is no longer possible to present to it. Therefore we should immediately recreate the 
+            // swap chain and try again in the next drawFrame call.
+            if (result == VK_ERROR_OUT_OF_DATE_KHR)
+            {
+                recreateSwapChain();
+                return;
+            } 
+            else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+            {
+                throw std::runtime_error("failed to acquire swap chain image!");
+            }
 
             // Check if a previous frame is using this image (i.e. there is its fence to wait on)
             if (imagesInFlight[imageIndex] != VK_NULL_HANDLE)
@@ -1122,7 +1152,20 @@ class HelloTriangleApplication
             presentInfo.pResults = nullptr; // Optional
 
             // submit request to present an image to the swap chain
-            vkQueuePresentKHR(presentQueue, &presentInfo);
+            result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+            // recreate swapchain if out of date or suboptimal
+            if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized)
+            {
+                // important to do this after vkQueuePresentKHR to ensure that the semaphores are
+                // in a consistent state, otherwise a signalled semaphore may never be properly waited upon
+                framebufferResized = false;
+                recreateSwapChain();
+            }
+            else if (result != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to present swap chain image!");
+            }
 
             // could use vkQueueWaitIdle(presentQueue) to wait for work to finish
             // but this would not be optimal GPU usage
