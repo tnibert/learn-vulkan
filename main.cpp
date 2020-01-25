@@ -13,6 +13,9 @@
 #include <cstdint>
 #include <algorithm>
 #include <fstream>
+#include <array>
+// for linear algebra related types (vectors, matrices)
+#include <glm/glm.hpp>
 
 /**
  * Misc notes:
@@ -36,6 +39,61 @@ const std::vector<const char*> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_N
 #else
     const bool enableValidationLayers = true;
 #endif
+
+struct Vertex
+{
+    // GLM provides us with C++ types that exactly match the vector types used in the shader language
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    // for passing data to vertex shader
+    static VkVertexInputBindingDescription getBindingDescription()
+    {
+        VkVertexInputBindingDescription bindingDescription = {};
+        bindingDescription.binding = 0;                                 // index in array of bindings
+        bindingDescription.stride = sizeof(Vertex);                     // number bytes between entries
+        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;     // Move to the next data entry after each vertex (as opposed to instance)
+        return bindingDescription;
+    }
+
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        // describes how to access vertex attribute
+        std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+        
+        // position attribute
+        attributeDescriptions[0].binding = 0;                           // specify from which binding the per-vertex data comes
+        attributeDescriptions[0].location = 0;                          // location directive in vertex shader
+        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;      // should use the format where the amount of color channels matches the number of components in the shader data type
+        /*
+         * formats:
+         * float: VK_FORMAT_R32_SFLOAT
+         * vec2: VK_FORMAT_R32G32_SFLOAT
+         * vec3: VK_FORMAT_R32G32B32_SFLOAT
+         * vec4: VK_FORMAT_R32G32B32A32_SFLOAT
+         * 
+         * The color type (SFLOAT, UINT, SINT) and bit width should also match the type of the shader input:
+         * ivec2: VK_FORMAT_R32G32_SINT, a 2-component vector of 32-bit signed integers
+         * uvec4: VK_FORMAT_R32G32B32A32_UINT, a 4-component vector of 32-bit unsigned integers
+         * double: VK_FORMAT_R64_SFLOAT, a double-precision (64-bit) float
+         */
+        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+
+        // color attribute
+        attributeDescriptions[1].binding = 0;
+        attributeDescriptions[1].location = 1;
+        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        
+        return attributeDescriptions;
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
 
 static std::vector<char> readFile(const std::string& filename)
 {
@@ -484,10 +542,15 @@ class HelloTriangleApplication
             // no vertex data to load
             VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
             vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-            vertexInputInfo.vertexBindingDescriptionCount = 0;
-            vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-            vertexInputInfo.vertexAttributeDescriptionCount = 0;
-            vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+
+            // enable pipeline to accept data from vertex container
+            auto bindingDescription = Vertex::getBindingDescription();
+            auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+            vertexInputInfo.vertexBindingDescriptionCount = 1;
+            vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+            vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
             // configure input assembly
             VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
