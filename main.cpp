@@ -21,6 +21,8 @@
  * If MAX_FRAMES_IN_FLIGHT is higher than the number of swap chain images or vkAcquireNextImageKHR returns images out-of-order
  * then it's possible that we may start rendering to a swap chain image that is already in flight. To avoid this, we
  * track for each swap chain image if a frame in flight is currently using it.
+ * 
+ * Minimization results in a frame buffer size of 0
  */
 
 const int WIDTH = 800;
@@ -216,10 +218,22 @@ class HelloTriangleApplication
 
         void recreateSwapChain() 
         {
+            // pause while window is minimized
+            int width = 0, height = 0;
+            glfwGetFramebufferSize(window, &width, &height);
+            while (width == 0 || height == 0)
+            {
+                glfwGetFramebufferSize(window, &width, &height);
+                glfwWaitEvents();
+            }
+
+            // wait for device to become available
             vkDeviceWaitIdle(device);
 
+            // clean up
             cleanupSwapChain();
 
+            // recreate
             createSwapChain();
             createImageViews();
             createRenderPass();
