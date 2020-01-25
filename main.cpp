@@ -169,11 +169,46 @@ class HelloTriangleApplication
             createSwapChain();
             createImageViews();
             createRenderPass();
-	    createGraphicsPipeline();
+	        createGraphicsPipeline();
             createFramebuffers();
             createCommandPool();
             createCommandBuffers();
             createSyncObjects();
+        }
+
+        void cleanupSwapChain()
+        {
+            for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
+            {
+                vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
+            }
+
+            vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+
+            vkDestroyPipeline(device, graphicsPipeline, nullptr);
+            vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+            vkDestroyRenderPass(device, renderPass, nullptr);
+
+            for (size_t i = 0; i < swapChainImageViews.size(); i++)
+            {
+                vkDestroyImageView(device, swapChainImageViews[i], nullptr);
+            }
+
+            vkDestroySwapchainKHR(device, swapChain, nullptr);
+        }
+
+        void recreateSwapChain() 
+        {
+            vkDeviceWaitIdle(device);
+
+            cleanupSwapChain();
+
+            createSwapChain();
+            createImageViews();
+            createRenderPass();
+            createGraphicsPipeline();
+            createFramebuffers();
+            createCommandBuffers();
         }
 
         /**
@@ -389,7 +424,7 @@ class HelloTriangleApplication
          */
         void createGraphicsPipeline()
         {
-	    // can destroy shader modules after graphics pipeline is created
+	        // can destroy shader modules after graphics pipeline is created
             auto vertShaderCode = readFile("shaders/vert.spv");
             auto fragShaderCode = readFile("shaders/frag.spv");
 
@@ -967,7 +1002,13 @@ class HelloTriangleApplication
             }
             else
             {
-                VkExtent2D actualExtent = {WIDTH, HEIGHT};
+                int width, height;
+                glfwGetFramebufferSize(window, &width, &height);
+
+                VkExtent2D actualExtent = {
+                    static_cast<uint32_t>(width),
+                    static_cast<uint32_t>(height)
+                };
 
                 actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
                 actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
@@ -1091,6 +1132,8 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            cleanupSwapChain();
+
             for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
             {
                 vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1099,32 +1142,19 @@ class HelloTriangleApplication
             }
 
             vkDestroyCommandPool(device, commandPool, nullptr);
-            
-            for (auto framebuffer : swapChainFramebuffers)
-            {
-                vkDestroyFramebuffer(device, framebuffer, nullptr);
-            }
-            
-            vkDestroyPipeline(device, graphicsPipeline, nullptr);
-            vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-            vkDestroyRenderPass(device, renderPass, nullptr);
-            
-            for (auto imageView : swapChainImageViews)
-            {
-                vkDestroyImageView(device, imageView, nullptr);
-            }
 
-            vkDestroySwapchainKHR(device, swapChain, nullptr);
             vkDestroyDevice(device, nullptr);
 
-            if(enableValidationLayers)
+            if (enableValidationLayers)
             {
                 DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
             }
 
             vkDestroySurfaceKHR(instance, surface, nullptr);
             vkDestroyInstance(instance, nullptr);
+
             glfwDestroyWindow(window);
+
             glfwTerminate();
         }
 
