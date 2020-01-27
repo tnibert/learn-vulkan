@@ -26,6 +26,8 @@
  * track for each swap chain image if a frame in flight is currently using it.
  * 
  * Minimization results in a frame buffer size of 0
+ * 
+ * Buffers in Vulkan are regions of memory used for storing arbitrary data that can be read by the graphics card.
  */
 
 const int WIDTH = 800;
@@ -210,6 +212,9 @@ class HelloTriangleApplication
         size_t currentFrame = 0;
 
         bool framebufferResized = false;
+
+        VkBuffer vertexBuffer;
+        VkDeviceMemory vertexBufferMemory;
   
         void initWindow()
         {
@@ -238,8 +243,95 @@ class HelloTriangleApplication
 	        createGraphicsPipeline();
             createFramebuffers();
             createCommandPool();
+            createVertexBuffer();
             createCommandBuffers();
             createSyncObjects();
+        }
+
+        /**
+         * Allocate a memory buffer on the GPU for vertex data
+         */ 
+        void createVertexBuffer()
+        {
+            VkBufferCreateInfo bufferInfo = {};
+            bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+            bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+            // purpose - can specify multiple using bitwise or
+            bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            // buffers can be owned by a specific queue family or be shared between multiple at the same time
+            bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+            if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to create vertex buffer!");
+            }
+
+            // must allocate memory for buffer
+            // Graphics cards can offer different types of memory to allocate from.
+            // Each type of memory varies in terms of allowed operations and performance characteristics.
+            // VkMemoryRequirement is struct with three fields:
+            // size, alignment, memoryTypeBits
+            VkMemoryRequirements memRequirements;
+            vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+            VkMemoryAllocateInfo allocInfo = {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+            allocInfo.allocationSize = memRequirements.size;
+            // must be able to map memory so we can write to it from the CPU
+            allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, 
+                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+            if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to allocate vertex buffer memory!");
+            }
+
+            // if everything went well, we can bind the memory
+            // fourth parameter is the offset within the region of memory
+            // a non zero offset must be divisible by memRequirements.alignment
+            vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+
+            // map buffer memory into cpu accessible memory
+            // last parameter of vkMapMemory() specifies the output for the pointer to the mapped memory
+            void* data;
+            vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+
+            /*
+             * Can now memcpy the vertex data to the mapped memory and unmap it again using vkUnmapMemory
+             * Unfortunately the driver may not immediately copy the data into the buffer memory, for example because of caching
+             * It is also possible that writes to the buffer are not visible in the mapped memory yet
+             * There are two ways to deal with that problem:
+             * Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT (what we've done)
+             * Call vkFlushMappedMemoryRanges to after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges before reading from the mapped memory
+             * 
+             * Host coherent may have worse performance; flushing only guarantees memory is moved to GPU as of next vkQueueSubmit()
+             */
+            memcpy(data, vertices.data(), (size_t) bufferInfo.size);
+            vkUnmapMemory(device, vertexBufferMemory);
+        }
+
+        /**
+         * Determine correct memory type to use
+         * param typeFilter: will be used to specify the bit field of memory types that are suitable
+         * return: memory type suitable for the buffer that also has all of the properties we need, or throw exception
+         */
+        uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+        {
+            // VkPhysicalDeviceMemoryProperties has two arrays: memoryTypes and memoryHeaps
+            // Memory heaps are distinct memory resources like dedicated VRAM and swap space in RAM for when VRAM runs out
+            // The memoryTypes array consists of VkMemoryType structs that specify the heap and properties of each type of memory
+            VkPhysicalDeviceMemoryProperties memProperties;
+            vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+            for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+            {
+                if (typeFilter & (1 << i) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+                {
+                    return i;
+                }
+            }
+
+            throw std::runtime_error("failed to find suitable memory type!");
         }
 
         /**
@@ -384,8 +476,13 @@ class HelloTriangleApplication
                 // bind the graphics pipeline
                 vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
+                // bind the vertex buffer
+                VkBuffer vertexBuffers[] = {vertexBuffer};
+                VkDeviceSize offsets[] = {0};
+                vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
+
                 // tell vulkan to draw a triangle
-                vkCmdDraw(commandBuffers[i], 3, 1, 0, 0);
+                vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
                 // end render pass
                 vkCmdEndRenderPass(commandBuffers[i]);
@@ -1253,6 +1350,10 @@ class HelloTriangleApplication
         void cleanup()
         {
             cleanupSwapChain();
+
+            // buffer should be available for use in rendering commands until the end of the program and it does not depend on the swap chain
+            vkDestroyBuffer(device, vertexBuffer, nullptr);
+            vkFreeMemory(device, vertexBufferMemory, nullptr);
 
             for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
             {
