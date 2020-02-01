@@ -249,21 +249,21 @@ class HelloTriangleApplication
         }
 
         /**
-         * Allocate a memory buffer on the GPU for vertex data
+         * Create a buffer
          */ 
-        void createVertexBuffer()
+        void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+                          VkBuffer& buffer, VkDeviceMemory& bufferMemory)
         {
             VkBufferCreateInfo bufferInfo = {};
             bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-            bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+            bufferInfo.size = size;
             // purpose - can specify multiple using bitwise or
-            bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            bufferInfo.usage = usage;
             // buffers can be owned by a specific queue family or be shared between multiple at the same time
             bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-            if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS)
-            {
-                throw std::runtime_error("failed to create vertex buffer!");
+            if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+                throw std::runtime_error("failed to create buffer!");
             }
 
             // must allocate memory for buffer
@@ -272,29 +272,36 @@ class HelloTriangleApplication
             // VkMemoryRequirement is struct with three fields:
             // size, alignment, memoryTypeBits
             VkMemoryRequirements memRequirements;
-            vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+            vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
 
             VkMemoryAllocateInfo allocInfo = {};
             allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             allocInfo.allocationSize = memRequirements.size;
-            // must be able to map memory so we can write to it from the CPU
-            allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, 
-                                                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
-            if (vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory) != VK_SUCCESS)
-            {
-                throw std::runtime_error("failed to allocate vertex buffer memory!");
+            if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
+                throw std::runtime_error("failed to allocate buffer memory!");
             }
 
             // if everything went well, we can bind the memory
             // fourth parameter is the offset within the region of memory
             // a non zero offset must be divisible by memRequirements.alignment
-            vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0);
+            vkBindBufferMemory(device, buffer, bufferMemory, 0);
+        }
+
+        /**
+         * Allocate a memory buffer on the GPU for vertex data
+         */ 
+        void createVertexBuffer()
+        {
+            // must be able to map memory so we can write to it from the CPU - VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+            VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+            createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexBuffer, vertexBufferMemory);
 
             // map buffer memory into cpu accessible memory
             // last parameter of vkMapMemory() specifies the output for the pointer to the mapped memory
             void* data;
-            vkMapMemory(device, vertexBufferMemory, 0, bufferInfo.size, 0, &data);
+            vkMapMemory(device, vertexBufferMemory, 0, bufferSize, 0, &data);
 
             /*
              * Can now memcpy the vertex data to the mapped memory and unmap it again using vkUnmapMemory
@@ -306,7 +313,7 @@ class HelloTriangleApplication
              * 
              * Host coherent may have worse performance; flushing only guarantees memory is moved to GPU as of next vkQueueSubmit()
              */
-            memcpy(data, vertices.data(), (size_t) bufferInfo.size);
+            memcpy(data, vertices.data(), (size_t) bufferSize);
             vkUnmapMemory(device, vertexBufferMemory);
         }
 
