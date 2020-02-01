@@ -102,10 +102,17 @@ struct Vertex
     }
 };
 
+// now we will draw a rectangle
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+// can stick to uint16_t for now because we're using less than 65535 unique vertices
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 static std::vector<char> readFile(const std::string& filename)
@@ -226,6 +233,8 @@ class HelloTriangleApplication
 
         VkBuffer vertexBuffer;
         VkDeviceMemory vertexBufferMemory;
+        VkBuffer indexBuffer;
+        VkDeviceMemory indexBufferMemory;
   
         void initWindow()
         {
@@ -255,6 +264,7 @@ class HelloTriangleApplication
             createFramebuffers();
             createCommandPool();
             createVertexBuffer();
+            createIndexBuffer();
             createCommandBuffers();
             createSyncObjects();
         }
@@ -298,6 +308,30 @@ class HelloTriangleApplication
             // fourth parameter is the offset within the region of memory
             // a non zero offset must be divisible by memRequirements.alignment
             vkBindBufferMemory(device, buffer, bufferMemory, 0);
+        }
+
+        void createIndexBuffer()
+        {
+            VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingBufferMemory;
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         stagingBuffer, stagingBufferMemory);
+
+            void* data;
+            vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+            memcpy(data, indices.data(), (size_t) bufferSize);
+            vkUnmapMemory(device, stagingBufferMemory);
+
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+
+            copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+
+            vkDestroyBuffer(device, stagingBuffer, nullptr);
+            vkFreeMemory(device, stagingBufferMemory, nullptr);
         }
 
         /**
@@ -561,8 +595,10 @@ class HelloTriangleApplication
                 VkDeviceSize offsets[] = {0};
                 vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
-                // tell vulkan to draw a triangle
-                vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+                vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+                // tell vulkan to draw the rectangle
+                vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
                 // end render pass
                 vkCmdEndRenderPass(commandBuffers[i]);
@@ -1430,6 +1466,9 @@ class HelloTriangleApplication
         void cleanup()
         {
             cleanupSwapChain();
+
+            vkDestroyBuffer(device, indexBuffer, nullptr);
+            vkFreeMemory(device, indexBufferMemory, nullptr);
 
             // buffer should be available for use in rendering commands until the end of the program and it does not depend on the swap chain
             vkDestroyBuffer(device, vertexBuffer, nullptr);
