@@ -28,6 +28,17 @@
  * Minimization results in a frame buffer size of 0
  * 
  * Buffers in Vulkan are regions of memory used for storing arbitrary data that can be read by the graphics card.
+ * 
+ * It should be noted that in a real world application, you're not supposed to actually call vkAllocateMemory for 
+ * every individual buffer. The maximum number of simultaneous memory allocations is limited by the maxMemoryAllocationCount 
+ * physical device limit, which may be as low as 4096 even on high end hardware like an NVIDIA GTX 1080. The 
+ * right way to allocate memory for a large number of objects at the same time is to create a custom allocator 
+ * that splits up a single allocation among many different objects by using the offset parameters that we've seen 
+ * in many functions.
+ * You can either implement such an allocator yourself, or use the VulkanMemoryAllocator library provided by the 
+ * GPUOpen initiative. However, for this tutorial it's okay to use a separate allocation for every resource, because 
+ * we won't come close to hitting any of these limits for now.
+ *
  */
 
 const int WIDTH = 800;
@@ -290,18 +301,28 @@ class HelloTriangleApplication
         }
 
         /**
-         * Allocate a memory buffer on the GPU for vertex data
+         * Allocate a memory buffer on the GPU for vertex data.
+         * We will use a staging buffer which is cpu accessible
+         * and a vertex buffer on the gpu, this will load vertex data from high
+         * performance memory.
          */ 
         void createVertexBuffer()
         {
-            // must be able to map memory so we can write to it from the CPU - VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-            createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, vertexBuffer, vertexBufferMemory);
+
+            // use a cpu accessible staging buffer
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingBufferMemory;
+
+            // must be able to map memory so we can write to it from the CPU - VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         stagingBuffer, stagingBufferMemory);
 
             // map buffer memory into cpu accessible memory
             // last parameter of vkMapMemory() specifies the output for the pointer to the mapped memory
             void* data;
-            vkMapMemory(device, vertexBufferMemory, 0, bufferSize, 0, &data);
+            vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
 
             /*
              * Can now memcpy the vertex data to the mapped memory and unmap it again using vkUnmapMemory
@@ -314,7 +335,59 @@ class HelloTriangleApplication
              * Host coherent may have worse performance; flushing only guarantees memory is moved to GPU as of next vkQueueSubmit()
              */
             memcpy(data, vertices.data(), (size_t) bufferSize);
-            vkUnmapMemory(device, vertexBufferMemory);
+            vkUnmapMemory(device, stagingBufferMemory);
+
+            // make vertex buffer device (gpu) local - can't map memory, but can copy from staging buffer
+            // VK_BUFFER_USAGE_TRANSFER_SRC_BIT: Buffer can be used as source in a memory transfer operation.
+            // VK_BUFFER_USAGE_TRANSFER_DST_BIT: Buffer can be used as destination in a memory transfer operation.
+            createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+
+            copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+            vkDestroyBuffer(device, stagingBuffer, nullptr);
+            vkFreeMemory(device, stagingBufferMemory, nullptr);
+        }
+
+        void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+        {
+            VkCommandBufferAllocateInfo allocInfo = {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocInfo.commandPool = commandPool;
+            allocInfo.commandBufferCount = 1;
+
+            VkCommandBuffer commandBuffer;
+            vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+            // start recording command buffer
+            VkCommandBufferBeginInfo beginInfo = {};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            // only going to use the command buffer once and wait with returning from the function
+            // until the copy operation has finished executing - VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            vkBeginCommandBuffer(commandBuffer, &beginInfo);
+            VkBufferCopy copyRegion = {};
+            copyRegion.srcOffset = 0; // Optional
+            copyRegion.dstOffset = 0; // Optional
+            copyRegion.size = size;
+            // transfer contents of buffers
+            vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+            vkEndCommandBuffer(commandBuffer);
+
+            // execute command buffer
+            VkSubmitInfo submitInfo = {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &commandBuffer;
+
+            vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            // A fence would allow you to schedule multiple transfers simultaneously and wait
+            // for all of them complete, instead of executing one at a time
+            vkQueueWaitIdle(graphicsQueue);
+
+            vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
         }
 
         /**
